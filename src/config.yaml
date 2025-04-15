@@ -1,0 +1,6 @@
+annotations_root: data/raw/annotations
+images_root: data/raw/converted_pngs_defects
+good_images_dir: data/raw/good_high_resolution
+output_dir: data/processed/output_aug_trainings
+converted_png_dir: data/raw/converted_pngs
+output_coco_dir : data/processed/output_coco_final
