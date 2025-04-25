@@ -1,6 +1,11 @@
 annotations_root: data/raw/annotations
 images_root: data/raw/converted_pngs_defects
 good_images_dir: data/raw/good_high_resolution
-output_dir: data/processed/output_aug_trainings
 converted_png_dir: data/raw/converted_pngs
-output_coco_dir : data/processed/output_coco_final
+output_coco_dir: data/processed/output_coco_final
+output_patchcore_dir: data/raw/
+output_dir_model_rf_detr: models/rf_detr
+output_dir_model_patchcore : ../models/patchcore
+output_inference_dir: ../results
+evaluation_patchcore_true_negatif: ../data/raw/patchcore_data/evaluation/true_negatif
+evaluation_patchcore_true_positif: ../data/raw/patchcore_data/evaluation/true_positif

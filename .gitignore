@@ -20,9 +20,11 @@ __pycache__/
 
 # DVC data & cache
 /data/
-/data/**
+!/data.dvc
 !.dvc/
-!data.dvc
+/results/
+/models/
+/src/patchcore_inspection/models
 .dvc/cache/
 .dvc/tmp/
 .dvc/plots/
