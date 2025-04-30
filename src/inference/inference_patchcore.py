@@ -9,12 +9,14 @@ from pathlib import Path
 from sklearn.cluster import DBSCAN
 from torch.utils.data import DataLoader
 import shutil
-
+import csv
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from patchcore_inspection.src.patchcore.patchcore import PatchCore
 from patchcore_inspection.src.patchcore import common
 from patchcore_inspection.src.patchcore.datasets.mvtec import MVTecDataset
 import torch
+from collections import defaultdict
+battery_ng_counter = defaultdict(int)
 # === Setup ===
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
@@ -31,18 +33,24 @@ print(f"🔍 FAISS is set to use: {'GPU' if use_faiss_gpu else 'CPU'}")
 data_dir_positif = (PROJECT_ROOT / cfg["evaluation_patchcore_true_positif"]).resolve()
 data_dir_negatif = (PROJECT_ROOT / cfg["evaluation_patchcore_true_negatif"]).resolve()
 model_save_path = (PROJECT_ROOT / cfg["output_dir_model_patchcore"]).resolve()
-output_path = (PROJECT_ROOT / cfg["output_inference_dir"] / 'patchcore').resolve()
+output_path = (PROJECT_ROOT / cfg["output_inference_dir"] / 'inference_patchcore').resolve()
 output_path.mkdir(parents=True, exist_ok=True)
 
+CSV_OUTPUT_PATH = output_path / "patchcore_boxes.csv"
+csv_file = open(CSV_OUTPUT_PATH, mode="w", newline="", encoding="utf-8")
+csv_writer = csv.writer(csv_file)
+csv_writer.writerow(["filename", "xmin", "ymin", "xmax", "ymax"])
 
 def patchcore_inference_with_mvtec_on_rois(
     model,
     original_image_path,
     roi_config,
     crop_output_dir,
+    csv_writer,
     threshold=2.5,
     resize_size=256,
 ):
+    
     original_img = cv2.imread(str(original_image_path))
     if original_img is None:
         return None, False
@@ -144,6 +152,9 @@ def patchcore_inference_with_mvtec_on_rois(
                 anomaly_detected = True
                 cv2.rectangle(overlay, (abs_x1, abs_y1), (abs_x2, abs_y2), (0, 0, 255), 2)
                 cv2.rectangle(roi_overlay, (rel_x1, rel_y1), (rel_x2, rel_y2), (0, 0, 255), 2)
+                # Save bbox to CSV
+                filename = Path(original_image_path).name
+                csv_writer.writerow([filename, abs_x1, abs_y1, abs_x2, abs_y2])
 
         cv2.imwrite(str(save_crop_dir / f"{crop_name}_mask.png"), norm_mask)
         cv2.imwrite(str(save_crop_dir / f"{crop_name}_overlay.png"), roi_overlay)
@@ -193,9 +204,12 @@ def run_patchcore_on_filtered_images(
             original_image_path=image_path,
             roi_config=roi_config,
             crop_output_dir=crop_output_dir,
+            csv_writer=csv_writer,
             threshold=threshold,
             resize_size=resize_size,
         )
+        if is_anomaly:
+            battery_ng_counter[battery_id] += 1
 
         if overlay is None:
             print(f"❌ Skipping {image_path} due to read error")
@@ -230,4 +244,13 @@ for data_dir in [data_dir_positif, data_dir_negatif]:
         resize_size=(168, 128),
         device=device
     )
+log_output_path = output_path / "patchcore_log.csv"
+with open(log_output_path, mode="w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["name", "result", "ng_count"])
+    for battery_id in sorted(battery_ng_counter.keys()):
+        count = battery_ng_counter[battery_id]
+        result = "NG" if count > 0 else "OK"
+        writer.writerow([battery_id, result, count])
+
 

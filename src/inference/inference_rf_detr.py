@@ -8,10 +8,15 @@ from pathlib import Path
 import supervision as sv
 import yaml
 import sys
+import csv
+from collections import defaultdict
 from rfdetr import RFDETRBase
+
+battery_ng_counter = defaultdict(int)
 
 def run_rfdetr_inference(dataset_dirs, output_dir, checkpoint_path, num_classes=1, threshold=0.7):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     print(f"🔍 Using device: {device}")
 
     model = RFDETRBase(pretrain_weights=str(checkpoint_path), num_classes=num_classes)
@@ -26,6 +31,12 @@ def run_rfdetr_inference(dataset_dirs, output_dir, checkpoint_path, num_classes=
     ]
 
     bbox_annotator = sv.BoxAnnotator()
+    # Prepare CSV to save bbox coordinates
+    csv_output_path = Path(output_dir) / "rf_detr.csv"
+    csv_file = open(csv_output_path, mode="w", newline="", encoding="utf-8")
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(["filename", "xmin", "ymin", "xmax", "ymax"])
+
     label_annotator = sv.LabelAnnotator(text_color=sv.Color.BLACK, text_thickness=2, smart_position=True)
 
     # === Collect Images ===
@@ -41,7 +52,7 @@ def run_rfdetr_inference(dataset_dirs, output_dir, checkpoint_path, num_classes=
                 if "負極" not in name:
                     continue
                 try:
-                    index = int(name.split("_")[-1].replace(".tif", ""))
+                    index = int(name.split("_")[-1].replace(".tif", "")
                     if 215 <= index <= 222:
                         image_paths.append(tif_path)
                 except ValueError:
@@ -71,6 +82,10 @@ def run_rfdetr_inference(dataset_dirs, output_dir, checkpoint_path, num_classes=
                 detections_all.append(detections)
 
         battery_id = image_path.parents[1].name
+
+        if detections_all:
+            battery_ng_counter[battery_id] += 1
+
         category_dir = "anomaly" if detections_all else "normal"
         dataset_name = Path(image_path).parts[-4]  # Extract top-level dataset folder name
         save_dir = Path(output_dir)  / category_dir / battery_id
@@ -85,9 +100,22 @@ def run_rfdetr_inference(dataset_dirs, output_dir, checkpoint_path, num_classes=
             ]
             annotated_image = bbox_annotator.annotate(image_pil.copy(), detections_merged)
             annotated_image = label_annotator.annotate(annotated_image, detections_merged, labels)
+            for box in detections_merged.xyxy:
+                xmin, ymin, xmax, ymax = box.tolist()
+                csv_writer.writerow([image_path.name, int(xmin), int(ymin), int(xmax), int(ymax)])
             annotated_image.save(save_path)
         else:
             image_pil.save(save_path)
+            
+            
+    log_output_path = Path(output_dir) / "rf_detr_log.csv"
+    with open(log_output_path, mode="w", newline="", encoding="utf-8") as log_f:
+        log_writer = csv.writer(log_f)
+        log_writer.writerow(["name", "result", "ng_count"])
+        for battery_id in sorted(battery_ng_counter.keys()):
+            count = battery_ng_counter[battery_id]
+            result = "NG" if count > 0 else "OK"
+            log_writer.writerow([battery_id, result, count])
 
     print(f"✅ Done. Saved to {output_dir}")
 
@@ -110,7 +138,7 @@ if __name__ == "__main__":
     
 
     run_rfdetr_inference(
-        dataset_dirs=[dataset1],
+        dataset_dirs=[dataset1,dataset2],
         output_dir=output_dir,
         checkpoint_path=checkpoint_path,
         num_classes=1,
