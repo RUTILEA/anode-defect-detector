@@ -9,7 +9,7 @@ import json
 import shutil
 from sklearn.model_selection import train_test_split
 
-def enhance_contrast_patch(base_img, mask, patch, y, x, strength=0.4):
+def enhance_contrast_patch(base_img, mask, patch, y, x, strength=0.6):
     region = cv2.cvtColor(base_img, cv2.COLOR_RGB2GRAY)[y:y+patch.shape[0], x:x+patch.shape[1]]
     region_median = np.median(region[mask])
     patch_gray = cv2.cvtColor(patch, cv2.COLOR_RGB2GRAY)
@@ -159,9 +159,9 @@ def augment_images_and_generate_coco(defects, good_images_dir, dest_good_images_
     return images, annotations, total_saved
 
 def split_and_save_coco_dataset(coco_images, coco_annotations, output_base_dir, original_image_dir, split_ratios=(0.7, 0.2, 0.1)):
-    
-    if len(coco_images) > 15000:
-        coco_images = random.sample(coco_images, 15000)
+    print(f"🔄 Splitting dataset into {split_ratios[0]*100:.0f}% train, {split_ratios[1]*100:.0f}% val, {split_ratios[2]*100:.0f}% test")
+    if len(coco_images) > 10000:
+        coco_images = random.sample(coco_images, 10000)
         
     img_train_val, img_test = train_test_split(coco_images, test_size=split_ratios[2], random_state=42)
     img_train, img_val = train_test_split(

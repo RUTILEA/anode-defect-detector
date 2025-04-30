@@ -3,6 +3,7 @@ images_root: data/raw/converted_pngs_defects
 good_images_dir: data/raw/good_high_resolution
 converted_png_dir: data/raw/converted_pngs
 output_coco_dir: data/processed/output_coco_final
+output_dir: data/processed/output
 output_patchcore_dir: data/raw/
 output_dir_model_rf_detr: models/rf_detr
 output_dir_model_patchcore : ../models/patchcore

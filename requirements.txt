@@ -58,7 +58,6 @@ opencv-python-headless==4.10.0.84
 packaging
 pandas==2.2.3
 parso==0.8.4
--e git+https://github.com/RUTILEA/anode-defect-detector.git@8c5a4eb86e79b7529d4be081b3987dfd9b2de724#egg=patchcore&subdirectory=src/patchcore_inspection
 peft==0.15.2
 pexpect==4.9.0
 pillow==11.2.1

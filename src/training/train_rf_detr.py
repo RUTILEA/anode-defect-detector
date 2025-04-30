@@ -33,16 +33,17 @@ print(f"📂 Dataset directory: {dataset_dir}")
 print(f"💾 Output directory: {output_dir}")
 
 # === Initialize and train model ===
-model = RFDETRBase()
+model = RFDETRBase(num_classes=1, device='cuda')
 model.train(
     dataset_dir=str(dataset_dir),
-    epochs=4,
-    batch_size=16,
-    grad_accum_steps=2,
+    epochs=15,
+    batch_size=32,
+    grad_accum_steps=1,
     lr=1e-3,
     output_dir=str(output_dir),
-    # early_stopping=True,
-    # early_stopping_patience=5,
-    # early_stopping_min_delta=0.01,
-    # early_stopping_use_ema=True
+    early_stopping=True,
+    early_stopping_patience=3,
+    early_stopping_min_delta=0.001,
+    num_workers=4,
+    early_stopping_use_ema=True
 )
