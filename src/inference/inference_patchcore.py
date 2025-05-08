@@ -239,17 +239,17 @@ for battery_id, rows in battery_bbox_rows.items():
     log_path = battery_result_dir / f"{battery_id}_log.csv"
     with open(log_path, mode="w", newline="", encoding="utf-8") as f_log:
         writer = csv.writer(f_log)
-        writer.writerow(["filename", "result", "ng", "ng_countL", "ng_countP", "ng_countE"])
+        writer.writerow(["Name", "Result", "NG_countL", "NG_countP", "NG_countE"])
         seen = set()
         for row in rows:
             if row[0] not in seen:
-                writer.writerow([row[0], "P", "NG", 1, "", ""])
+                writer.writerow([row[0], "NG", 1, "", ""])
                 seen.add(row[0])
 
     detected_path = battery_result_dir / f"{battery_id}_detected.csv"
     with open(detected_path, mode="w", newline="", encoding="utf-8") as f_det:
         writer = csv.writer(f_det)
-        writer.writerow(["filename", "xmin", "ymin", "xmax", "ymax", "ng_countL", "ng_countP", "ng_countE"])
+        writer.writerow(["file_name", "xmin", "ymin", "xmax", "ymax", "L", "P", "E"])
         for row in rows:
             writer.writerow(row)
 
