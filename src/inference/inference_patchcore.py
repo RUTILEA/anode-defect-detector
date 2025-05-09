@@ -12,6 +12,8 @@ import shutil
 import csv
 import torch
 from collections import defaultdict
+import warnings
+warnings.filterwarnings("ignore", message="torch.meshgrid")
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from patchcore_inspection.src.patchcore.patchcore import PatchCore
@@ -204,10 +206,7 @@ if __name__ == "__main__":
         inference.run_patchcore_on_filtered_images(
             model_path=inference.model_save_path,
             base_folder=data_dir,
-            roi_config=[
-                {"x_min": 127, "x_max": 294, "y_min": 448, "y_max": 576, "name": "left"},
-                {"x_min": 733, "x_max": 900, "y_min": 448, "y_max": 576, "name": "right"},
-            ],
+            roi_config=inference.config.get("roi_config"),
             crop_output_base=(inference.output_path / 'patchcore_crops').resolve(),
             final_overlay_base=inference.output_path,
             threshold=2.5,

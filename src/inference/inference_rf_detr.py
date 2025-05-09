@@ -11,6 +11,8 @@ import sys
 import csv
 from collections import defaultdict
 from rfdetr import RFDETRBase
+import warnings
+warnings.filterwarnings("ignore")
 
 class RFDETRInference:
     def __init__(self, config_path):
@@ -61,12 +63,10 @@ class RFDETRInference:
 
     def run_inference(self, dataset_dirs, output_dir, threshold=0.8):
         image_paths = self.collect_image_paths(dataset_dirs)
-        print(f"Found {len(image_paths)} images for inference.")
 
         for image_path in tqdm(image_paths, desc="RF-DETR Inference"):
             image_np = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
             if image_np is None:
-                print(f"Failed to read: {image_path}")
                 continue
 
             image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
@@ -82,7 +82,10 @@ class RFDETRInference:
                     detections.xyxy[:, [1, 3]] += roi["y_min"]
                     detections_all.append(detections)
 
-            battery_id = image_path.parents[1].name
+            battery_folder = image_path.parents[1].name 
+            z_axis_folder = image_path.parents[0].name
+            battery_id = os.path.join(battery_folder, z_axis_folder)
+
             if detections_all:
                 self.battery_ng_counter[battery_id] += 1
 
@@ -148,7 +151,6 @@ if __name__ == "__main__":
     sys.path.append(str(PROJECT_ROOT))
 
     config_path = PROJECT_ROOT / "config.yaml"
-    print(f" Loading config from: {config_path}")
     inference = RFDETRInference(config_path=config_path)
 
     dataset = PROJECT_ROOT / inference.config["for_prediction"]

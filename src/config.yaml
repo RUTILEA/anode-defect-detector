@@ -10,4 +10,16 @@ output_dir_model_patchcore : ../models/patchcore
 output_inference_dir: ../results
 for_prediction: ../data/raw/input_data
 export_ai_csv_files: false
+roi_config:
+  - x_min: 127
+    x_max: 294
+    y_min: 448
+    y_max: 576
+    name: "left"
+  - x_min: 733
+    x_max: 900
+    y_min: 448
+    y_max: 576
+    name: "right"
+
 

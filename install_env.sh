@@ -1,5 +1,5 @@
 
-ENV_NAME="ml-env2"
+ENV_NAME="checkthis"
 PYTHON_VERSION="3.10"
 
 install_miniconda() {
