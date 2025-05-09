@@ -8,5 +8,6 @@ output_patchcore_dir: data/raw/
 output_dir_model_rf_detr: models/rf_detr
 output_dir_model_patchcore : ../models/patchcore
 output_inference_dir: ../results
-evaluation_patchcore_true_negatif: ../data/raw/patchcore_data/evaluation/true_negatif
-evaluation_patchcore_true_positif: ../data/raw/patchcore_data/evaluation/true_positif
+for_prediction: ../data/raw/input_data
+export_ai_csv_files: false
+
