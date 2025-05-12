@@ -61,7 +61,7 @@ RF-DETR is a supervised object detection transformer without anchor regions:
 * Uses a shared MLP head to predict bounding box coordinates and class labels
 * Trains end-to-end using set-based Hungarian matching with a combination of classification and localization losses
 
-![RF-DETR Architecture](https://github.com/facebookresearch/detectron2/raw/main/docs/tutorials/assets/detr.png)
+![RF-DETR Architecture](https://learnopencv.com/wp-content/uploads/2025/04/deformable_detr_foundation_for_RF-DETR.png)
 
 ---
 
