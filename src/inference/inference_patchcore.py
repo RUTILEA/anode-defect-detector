@@ -26,7 +26,7 @@ class PatchCoreInference:
         self.config = self.load_config(config_path)
         self.device = torch.device("cuda:0")
         self.use_faiss_gpu = "cuda" in str(self.device)
-        self.data_dir = (self.project_root.parent / self.config["for_prediction"]).resolve()
+        self.data_dir = (self.project_root.parent / self.config["input_dir"]).resolve()
         self.model_save_path = (self.project_root.parent / self.config["output_dir_model_patchcore"]).resolve()
         self.output_path = (self.project_root.parent / self.config["output_inference_dir"] / 'inference_patchcore').resolve()
         self.output_path.mkdir(parents=True, exist_ok=True)

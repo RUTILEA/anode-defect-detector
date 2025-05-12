@@ -9,7 +9,7 @@ if __name__ == "__main__":
     config_path = PROJECT_ROOT / "config.yaml"
     inference = RFDETRInference(config_path=config_path)
 
-    dataset = PROJECT_ROOT / inference.config["for_prediction"]
+    dataset = PROJECT_ROOT / inference.config["input_dir"]
     output_dir = PROJECT_ROOT / inference.config["output_inference_dir"] / "inference_rf_detr"
 
     inference.run_inference(
