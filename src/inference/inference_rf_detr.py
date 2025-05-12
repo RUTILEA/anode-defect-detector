@@ -140,19 +140,3 @@ class RFDETRInference:
                 writer.writerow(["file_name", "xmin", "ymin", "xmax", "ymax", "L", "P", "E"])
                 for row in rows:
                     writer.writerow(row)
-
-if __name__ == "__main__":
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    sys.path.append(str(PROJECT_ROOT))
-
-    config_path = PROJECT_ROOT / "config.yaml"
-    inference = RFDETRInference(config_path=config_path)
-
-    dataset = PROJECT_ROOT / inference.config["for_prediction"]
-    output_dir = PROJECT_ROOT / inference.config["output_inference_dir"] / "inference_rf_detr"
-
-    inference.run_inference(
-        dataset_dirs=[dataset],
-        output_dir=output_dir,
-        threshold=inference.config.get("rf_detr_threshold")
-    )

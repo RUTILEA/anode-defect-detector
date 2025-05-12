@@ -1,7 +1,7 @@
 output_dir_model_rf_detr: models/rf_detr # need
-output_dir_model_patchcore : ../models/patchcore
-output_inference_dir: ../results # need
-for_prediction: ../data/raw/input_data # need
+output_dir_model_patchcore : models/patchcore
+output_inference_dir: results # need
+for_prediction: data/raw/input_data # need
 export_ai_csv_files: false # need
 roi_config:
   - x_min: 127

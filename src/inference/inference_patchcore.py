@@ -26,9 +26,9 @@ class PatchCoreInference:
         self.config = self.load_config(config_path)
         self.device = torch.device("cuda:0")
         self.use_faiss_gpu = "cuda" in str(self.device)
-        self.data_dir = (self.project_root / self.config["for_prediction"]).resolve()
-        self.model_save_path = (self.project_root / self.config["output_dir_model_patchcore"]).resolve()
-        self.output_path = (self.project_root / self.config["output_inference_dir"] / 'inference_patchcore').resolve()
+        self.data_dir = (self.project_root.parent / self.config["for_prediction"]).resolve()
+        self.model_save_path = (self.project_root.parent / self.config["output_dir_model_patchcore"]).resolve()
+        self.output_path = (self.project_root.parent / self.config["output_inference_dir"] / 'inference_patchcore').resolve()
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.min_idx = self.config.get("filter_index_range").get("min")
         self.max_idx = self.config.get("filter_index_range").get("max")
@@ -153,7 +153,7 @@ class PatchCoreInference:
             nn_method=common.FaissNN(on_gpu=self.use_faiss_gpu, num_workers=32)
         )
 
-        for image_path in tqdm(sorted(filtered_paths), desc="Processing 負極 Z軸 0215–0222"):
+        for image_path in tqdm(sorted(filtered_paths), desc="PATCHCORE Inference"):
             image_path = Path(image_path)
             image_stem = image_path.stem
             battery_id = image_path.parent.parent.name
@@ -208,20 +208,20 @@ class PatchCoreInference:
                 for row in rows:
                     writer.writerow(row)
 
-if __name__ == "__main__":
-    config_path = Path(__file__).resolve().parent.parent / "config.yaml"
-    inference = PatchCoreInference(config_path=config_path)
+# if __name__ == "__main__":
+#     config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+#     inference = PatchCoreInference(config_path=config_path)
 
-    for data_dir in [inference.data_dir]:
-        inference.run_patchcore_on_filtered_images(
-            model_path=inference.model_save_path,
-            base_folder=data_dir,
-            roi_config=inference.config.get("roi_config"),
-            crop_output_base=(inference.output_path / 'patchcore_crops').resolve(),
-            final_overlay_base=inference.output_path,
-            threshold=inference.config.get("patchcore_threshold"),
-            resize_size=inference.config.get("resize_size")
-        )
+#     for data_dir in [inference.data_dir]:
+#         inference.run_patchcore_on_filtered_images(
+#             model_path=inference.model_save_path,
+#             base_folder=data_dir,
+#             roi_config=inference.config.get("roi_config"),
+#             crop_output_base=(inference.output_path / 'patchcore_crops').resolve(),
+#             final_overlay_base=inference.output_path,
+#             threshold=inference.config.get("patchcore_threshold"),
+#             resize_size=inference.config.get("resize_size")
+#         )
 
-    if inference.config.get("export_ai_csv_files"):
-        inference.save_csv_results()
+#     if inference.config.get("export_ai_csv_files"):
+#         inference.save_csv_results()
