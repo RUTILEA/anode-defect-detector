@@ -12,27 +12,25 @@ import csv
 from collections import defaultdict
 from rfdetr import RFDETRBase
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=UserWarning)
 
 class RFDETRInference:
     def __init__(self, config_path):
         self.project_root = Path(__file__).resolve().parent.parent
         self.config = self.load_config(config_path)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.checkpoint_name = self.config["rf_detr_checkpoint"]
         self.model = RFDETRBase(
-            pretrain_weights=str(self.project_root / ".." / self.config["output_dir_model_rf_detr"] / "checkpoint_best_total.pth"),
-            num_classes=1
+            pretrain_weights=str(self.project_root / ".." / self.config["output_dir_model_rf_detr"] / self.checkpoint_name),
+            num_classes=1,pretrained=False,
         )
         self.model.model.model.to(self.device)
         self.model.model.device = self.device
         self.model.model.model.eval()
-
-        self.class_labels = ['upper defect']
-        self.roi_config = [
-            {"x_min": 127, "x_max": 294, "y_min": 448, "y_max": 576, "name": "left"},
-            {"x_min": 733, "x_max": 900, "y_min": 448, "y_max": 576, "name": "right"},
-        ]
-
+        self.class_label = [self.config["class_label"]]
+        self.roi_config =  self.config.get("roi_config")
+        self.min_idx = self.config.get("filter_index_range").get("min")
+        self.max_idx = self.config.get("filter_index_range").get("max")
         self.label_annotator = sv.LabelAnnotator(text_color=sv.Color.BLACK, text_thickness=2, smart_position=True)
         self.bbox_annotator = sv.BoxAnnotator()
         self.battery_ng_counter = defaultdict(int)
@@ -55,7 +53,7 @@ class RFDETRInference:
                         continue
                     try:
                         index = int(name.split("_")[-1].replace(".tif", ""))
-                        if 215 <= index <= 222:
+                        if self.min_idx <= index <= self.max_idx:
                             image_paths.append(tif_path)
                     except ValueError:
                         continue
@@ -97,7 +95,7 @@ class RFDETRInference:
             if detections_all:
                 detections_merged = sv.Detections.merge(detections_all)
                 labels = [
-                    f"{self.class_labels[class_id]} {confidence:.2f}"
+                    f"{self.class_label[class_id]} {confidence:.2f}"
                     for class_id, confidence in zip(detections_merged.class_id, detections_merged.confidence)
                 ]
                 annotated_image = self.bbox_annotator.annotate(image_pil.copy(), detections_merged)
@@ -113,9 +111,6 @@ class RFDETRInference:
 
         if self.config.get("export_ai_csv_files"):
             self.save_csv_results(output_dir)
-        else:
-            print("Skipping CSV export as export_ai_csv_files is set to false in config.")
-
 
     def save_csv_results(self, output_dir):
         ai_results_root = Path(output_dir) / "AI_RESULTS"
@@ -159,5 +154,5 @@ if __name__ == "__main__":
     inference.run_inference(
         dataset_dirs=[dataset],
         output_dir=output_dir,
-        threshold=0.8
+        threshold=inference.config.get("rf_detr_threshold")
     )

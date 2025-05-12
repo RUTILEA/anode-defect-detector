@@ -41,6 +41,6 @@ pip install -r requirements.txt
 
 conda install -c pytorch faiss-gpu -y
 
-echo "✅ Setup complete! Dropping into environment '$ENV_NAME'..."
+echo "Setup complete! Dropping into environment '$ENV_NAME'..."
 exec bash --rcfile <(echo "source $(conda info --base)/etc/profile.d/conda.sh && conda activate $ENV_NAME")
 

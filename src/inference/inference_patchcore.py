@@ -13,7 +13,7 @@ import csv
 import torch
 from collections import defaultdict
 import warnings
-warnings.filterwarnings("ignore", message="torch.meshgrid")
+warnings.filterwarnings("ignore", category=UserWarning)
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from patchcore_inspection.src.patchcore.patchcore import PatchCore
@@ -26,12 +26,13 @@ class PatchCoreInference:
         self.config = self.load_config(config_path)
         self.device = torch.device("cuda:0")
         self.use_faiss_gpu = "cuda" in str(self.device)
-
         self.data_dir = (self.project_root / self.config["for_prediction"]).resolve()
         self.model_save_path = (self.project_root / self.config["output_dir_model_patchcore"]).resolve()
         self.output_path = (self.project_root / self.config["output_inference_dir"] / 'inference_patchcore').resolve()
         self.output_path.mkdir(parents=True, exist_ok=True)
-
+        self.min_idx = self.config.get("filter_index_range").get("min")
+        self.max_idx = self.config.get("filter_index_range").get("max")
+        self.class_label = self.config.get("class_label")
         self.battery_ng_counter = defaultdict(int)
         self.battery_bbox_rows = defaultdict(list)
 
@@ -122,6 +123,15 @@ class PatchCoreInference:
                         filename_png, abs_x1, abs_y1, abs_x2, abs_y2, 1, "", ""
                     ])
                     cv2.rectangle(overlay, (abs_x1, abs_y1), (abs_x2, abs_y2), (0, 0, 255), 2)
+                    font_scale = 0.6
+                    font_thickness = 1
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    text_size = cv2.getTextSize(self.class_label, font, font_scale, font_thickness)[0]
+                    text_origin = (abs_x1, abs_y1 - 5 if abs_y1 - 5 > 10 else abs_y1 + 15)
+                    cv2.putText(
+                        overlay, self.class_label, text_origin, font,
+                        font_scale, (0, 0, 255), font_thickness, lineType=cv2.LINE_AA
+                    )
 
         return overlay, anomaly_detected
 
@@ -133,7 +143,7 @@ class PatchCoreInference:
             if "負極" not in path or "Z軸" not in path:
                 continue
             match = re.search(r"_(\d{4})\.tif$", path)
-            if match and 215 <= int(match.group(1)) <= 222:
+            if match and self.min_idx <= int(match.group(1)) <= self.max_idx:
                 filtered_paths.append(path)
 
         model = PatchCore(device=self.device)
@@ -209,8 +219,8 @@ if __name__ == "__main__":
             roi_config=inference.config.get("roi_config"),
             crop_output_base=(inference.output_path / 'patchcore_crops').resolve(),
             final_overlay_base=inference.output_path,
-            threshold=2.5,
-            resize_size=(168, 128),
+            threshold=inference.config.get("patchcore_threshold"),
+            resize_size=inference.config.get("resize_size")
         )
 
     if inference.config.get("export_ai_csv_files"):
