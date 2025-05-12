@@ -1,15 +1,8 @@
-annotations_root: data/raw/annotations
-images_root: data/raw/converted_pngs_defects
-good_images_dir: data/raw/good_high_resolution
-converted_png_dir: data/raw/converted_pngs
-output_coco_dir: data/processed/output_coco_final
-output_dir: data/processed/output
-output_patchcore_dir: data/raw/
-output_dir_model_rf_detr: models/rf_detr
+output_dir_model_rf_detr: models/rf_detr # need
 output_dir_model_patchcore : ../models/patchcore
-output_inference_dir: ../results
-for_prediction: ../data/raw/input_data
-export_ai_csv_files: false
+output_inference_dir: ../results # need
+for_prediction: ../data/raw/input_data # need
+export_ai_csv_files: false # need
 roi_config:
   - x_min: 127
     x_max: 294
@@ -21,13 +14,12 @@ roi_config:
     y_min: 448
     y_max: 576
     name: "right"
-
-rf_detr_checkpoint: checkpoint_best_total.pth
-class_label: upper crack
-patchcore_threshold: 2.5
-rf_detr_threshold: 0.8
-resize_size: [168, 128]
-filter_index_range:
+rf_detr_checkpoint: checkpoint_best_total.pth # need
+class_label: upper crack  # need
+patchcore_threshold: 2.5 # need
+rf_detr_threshold: 0.8 # need
+resize_size: [168, 128] # need
+filter_index_range: # need
   min: 215
   max: 222
 
