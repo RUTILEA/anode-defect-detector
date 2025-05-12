@@ -15,7 +15,7 @@ roi_config:
     y_max: 576
     name: "right"
 rf_detr_checkpoint: checkpoint_best_total.pth # need
-class_label: upper crack  # need
+class_label: anode crack  # need
 patchcore_threshold: 2.5 # need
 rf_detr_threshold: 0.8 # need
 resize_size: [168, 128] # need

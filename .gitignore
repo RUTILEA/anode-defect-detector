@@ -1,39 +1,32 @@
-# Python
 __pycache__/
 
-# Jupyter notebooks checkpoints
 .ipynb_checkpoints/
 
-# VSCode settings
 .vscode/
 
-# PyCharm settings
 .idea/
 *.iml
 
-# Logs & caches
 *.log
 *.tmp
 *.bak
 *.swp
 .DS_Store
 
-# DVC data & cache
 /data/
 !/data.dvc
 !.dvc/
 /results/
-/models/
+/models/*
+!models/.gitkeep
 /src/patchcore_inspection/models
 .dvc/cache/
 .dvc/tmp/
 .dvc/plots/
 
-# DVC experiments (optional)
 .experiments/
 experiments/
 
-# Output folders (optional)
 output/
 outputs/
 runs/
