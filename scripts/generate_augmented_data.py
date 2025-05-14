@@ -1,15 +1,19 @@
 import sys
-import os
-import yaml
 from pathlib import Path
-
+import yaml
+import os
+import shutil
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.extract_defects import extract_defects_from_annotations
-from src.data.augment_defects import augment_images_and_generate_coco, split_and_save_coco_dataset
+from src.data.extract_defects import DefectExtractor
+from src.data.augment_defects import DefectAugmentor
 from src.utils.coco_utils import save_coco_json
+from src.utils.split import split_and_save_coco_dataset
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(PROJECT_ROOT))
 
 with open(PROJECT_ROOT / "src/config.yaml", "r") as f:
     cfg = yaml.safe_load(f)
@@ -20,16 +24,20 @@ roi_config = [
 ]
 
 def main():
-    defects, imgs1, anns1, img_id, ann_id = extract_defects_from_annotations(
-        cfg["annotations_root"], cfg["images_root"], cfg["output_dir"], roi_config
+    extractor = DefectExtractor(
+        annotations_root=cfg["annotations_root"],
+        images_root=cfg["images_root"],
+        output_dir=cfg["output_dir"],
+        roi_config=roi_config
     )
+    defects, imgs1, anns1, img_id, ann_id = extractor.extract()
 
-    imgs2, anns2, _ = augment_images_and_generate_coco(
+    augmentor = DefectAugmentor(roi_config=roi_config)
+    imgs2, anns2, _ = augmentor.augment_images_and_generate_coco(
         defects=defects,
         good_images_dir=cfg["good_images_dir"],
         dest_good_images_dir=cfg["converted_png_dir"],
         output_dir=cfg["output_dir"],
-        roi_config=roi_config,
         img_id_start=img_id,
         ann_id_start=ann_id
     )
