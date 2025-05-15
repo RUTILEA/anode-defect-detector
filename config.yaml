@@ -2,8 +2,8 @@ output_dir_model_rf_detr: models/rf_detr         # Folder for RF-DETR model chec
 output_dir_model_patchcore: models/patchcore     # Folder for PatchCore model files
 
 output_inference_dir: results                    # Root folder where inference outputs (images, CSVs) are saved
-input_dir: data/raw/input_data              # Directory containing images to run inference on
-export_ai_csv_files: false                       # Whether to export detection results as CSV
+input_dir: data/NEGATIVES                       # Directory containing images to run inference on
+export_ai_csv_files: True                       # Whether to export detection results as CSV
 
 roi_config:
   - x_min: 127                                   # Left ROI X min
@@ -20,11 +20,11 @@ roi_config:
 rf_detr_checkpoint: checkpoint_best_total.pth    # RF-DETR model weight file name (inside output_dir_model_rf_detr)
 class_label: anode crack                         # Class label for detected anomalies
 
-patchcore_threshold: 2.5                         # Anomaly score threshold for PatchCore (higher = stricter)
+patchcore_threshold: 2.7                        # Anomaly score threshold for PatchCore (higher = stricter)
 rf_detr_threshold: 0.8                           # Confidence threshold for RF-DETR predictions
 
 resize_size: [168, 128]                          # Resize dimensions for PatchCore ROI crops (width x height)
 
 filter_index_range:                              # Only process images with index within this range
-  min: 215
-  max: 222
+  min: 205
+  max: 230
