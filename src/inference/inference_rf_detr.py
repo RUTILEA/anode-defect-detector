@@ -130,7 +130,6 @@ class RFDETRInference:
 
         if self.config.get("export_ai_csv_files"):
             self.save_csv_results(output_dir)
-
     def save_csv_results(self, output_dir):
         ai_results_root = Path(output_dir) / "AI_RESULTS"
         ai_results_root.mkdir(parents=True, exist_ok=True)
