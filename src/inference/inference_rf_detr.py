@@ -22,13 +22,13 @@ class RFDETRInference:
         self.checkpoint_name = self.config["rf_detr_checkpoint"]
         self.model = RFDETRBase(
             pretrain_weights=str(self.project_root / ".." / self.config["output_dir_model_rf_detr"] / self.checkpoint_name),
-            num_classes=1,pretrained=False,
+            num_classes=1, pretrained=False,
         )
         self.model.model.model.to(self.device)
         self.model.model.device = self.device
         self.model.model.model.eval()
         self.class_label = [self.config["class_label"]]
-        self.roi_config =  self.config.get("roi_config")
+        self.roi_config = self.config.get("roi_config")
         self.min_idx = self.config.get("filter_index_range").get("min")
         self.max_idx = self.config.get("filter_index_range").get("max")
         self.label_annotator = sv.LabelAnnotator(text_color=sv.Color.BLACK, text_thickness=2, smart_position=True)
@@ -62,52 +62,71 @@ class RFDETRInference:
     def run_inference(self, dataset_dirs, output_dir, threshold=0.8):
         image_paths = self.collect_image_paths(dataset_dirs)
 
-        for image_path in tqdm(image_paths, desc="RF-DETR Inference"):
-            image_np = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-            if image_np is None:
-                continue
+        from collections import defaultdict
+        battery_images = defaultdict(list)
+        for path in image_paths:
+            battery_folder = path.parents[1].name
+            z_axis_folder = path.parents[0].name
+            battery_id = f"{battery_folder}__{z_axis_folder}"
+            battery_images[battery_id].append(path)
 
-            image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
-            image_pil = Image.fromarray(image_rgb)
-            detections_all = []
+        for battery_id, paths in tqdm(battery_images.items(), desc="RF-DETR Inference"):
+            paths = sorted(paths, key=lambda x: int(x.stem.split("_")[-1]))
+            detection_flags = []
+            image_results = []
 
-            for roi in self.roi_config:
-                roi_crop = image_rgb[roi["y_min"]:roi["y_max"], roi["x_min"]:roi["x_max"]]
-                roi_image = Image.fromarray(roi_crop)
-                detections = self.model.predict(roi_image, threshold=threshold)
-                if len(detections.xyxy) > 0:
-                    detections.xyxy[:, [0, 2]] += roi["x_min"]
-                    detections.xyxy[:, [1, 3]] += roi["y_min"]
-                    detections_all.append(detections)
+            for image_path in paths:
+                image_np = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+                if image_np is None:
+                    detection_flags.append((image_path, False))
+                    continue
 
-            battery_folder = image_path.parents[1].name 
-            z_axis_folder = image_path.parents[0].name
-            battery_id = os.path.join(battery_folder, z_axis_folder)
+                image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
+                image_pil = Image.fromarray(image_rgb)
+                detections_all = []
 
-            if detections_all:
-                self.battery_ng_counter[battery_id] += 1
+                for roi in self.roi_config:
+                    roi_crop = image_rgb[roi["y_min"]:roi["y_max"], roi["x_min"]:roi["x_max"]]
+                    roi_image = Image.fromarray(roi_crop)
+                    detections = self.model.predict(roi_image, threshold=threshold)
+                    if len(detections.xyxy) > 0:
+                        detections.xyxy[:, [0, 2]] += roi["x_min"]
+                        detections.xyxy[:, [1, 3]] += roi["y_min"]
+                        detections_all.append(detections)
 
-            category_dir = "anomaly" if detections_all else "normal"
-            save_dir = Path(output_dir) / category_dir / battery_id
-            save_dir.mkdir(parents=True, exist_ok=True)
-            save_path = save_dir / f"{image_path.stem}.png"
+                image_results.append((image_path, image_pil, detections_all))
+                detection_flags.append((image_path, bool(detections_all)))
 
-            if detections_all:
-                detections_merged = sv.Detections.merge(detections_all)
-                labels = [
-                    f"{self.class_label[class_id]} {confidence:.2f}"
-                    for class_id, confidence in zip(detections_merged.class_id, detections_merged.confidence)
-                ]
-                annotated_image = self.bbox_annotator.annotate(image_pil.copy(), detections_merged)
-                annotated_image = self.label_annotator.annotate(annotated_image, detections_merged, labels)
-                annotated_image.save(save_path)
+            anomaly_indices = set()
+            for i in range(len(detection_flags) - 3):
+                if all(flag for _, flag in detection_flags[i:i+4]):
+                    for j in range(i, i+4):
+                        anomaly_indices.add(detection_flags[j][0])
 
-                filename_png = image_path.with_suffix(".png").name
-                for box in detections_merged.xyxy:
-                    xmin, ymin, xmax, ymax = map(int, box.tolist())
-                    self.battery_bbox_rows[battery_id].append([filename_png, xmin, ymin, xmax, ymax, 1, "", ""])
-            else:
-                image_pil.save(save_path)
+            for image_path, image_pil, detections_all in image_results:
+                label = "anomaly" if image_path in anomaly_indices else "normal"
+                save_dir = Path(output_dir) / label / battery_id
+                save_dir.mkdir(parents=True, exist_ok=True)
+                save_path = save_dir / f"{image_path.stem}.png"
+
+                if image_path in anomaly_indices:
+                    detections_merged = sv.Detections.merge(detections_all)
+                    labels = [
+                        f"{self.class_label[class_id]} {confidence:.2f}"
+                        for class_id, confidence in zip(detections_merged.class_id, detections_merged.confidence)
+                    ]
+                    annotated_image = self.bbox_annotator.annotate(image_pil.copy(), detections_merged)
+                    annotated_image = self.label_annotator.annotate(annotated_image, detections_merged, labels)
+                    annotated_image.save(save_path)
+
+                    filename_png = image_path.with_suffix(".png").name
+                    for box in detections_merged.xyxy:
+                        xmin, ymin, xmax, ymax = map(int, box.tolist())
+                        self.battery_bbox_rows[battery_id].append([filename_png, xmin, ymin, xmax, ymax, 1, "", ""])
+
+                    self.battery_ng_counter[battery_id] += 1
+                else:
+                    image_pil.save(save_path)
 
         if self.config.get("export_ai_csv_files"):
             self.save_csv_results(output_dir)
@@ -121,10 +140,13 @@ class RFDETRInference:
             if ng_count == 0:
                 continue
 
-            battery_result_dir = ai_results_root / battery_id
+            # Keep only the battery folder name
+            safe_battery_id = battery_id.split("__")[0]  # removes __[Z軸] if present
+
+            battery_result_dir = ai_results_root / safe_battery_id
             battery_result_dir.mkdir(parents=True, exist_ok=True)
 
-            log_path = battery_result_dir / f"{battery_id}_log.csv"
+            log_path = battery_result_dir / f"{safe_battery_id}_log.csv"
             with open(log_path, mode="w", newline="", encoding="utf-8") as f_log:
                 writer = csv.writer(f_log)
                 writer.writerow(["Name", "Result", "NG_countL", "NG_countP", "NG_countE"])
@@ -134,7 +156,7 @@ class RFDETRInference:
                         writer.writerow([row[0], "NG", 1, "", ""])
                         seen.add(row[0])
 
-            detected_path = battery_result_dir / f"{battery_id}_detected.csv"
+            detected_path = battery_result_dir / f"{safe_battery_id}_detected.csv"
             with open(detected_path, mode="w", newline="", encoding="utf-8") as f_det:
                 writer = csv.writer(f_det)
                 writer.writerow(["file_name", "xmin", "ymin", "xmax", "ymax", "L", "P", "E"])
