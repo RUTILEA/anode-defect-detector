@@ -3,7 +3,7 @@ output_dir_model_patchcore: models/patchcore     # Folder for PatchCore model fi
 
 output_inference_dir: results                    # Root folder where inference outputs (images, CSVs) are saved
 input_dir: data/NEGATIVES                       # Directory containing images to run inference on
-export_ai_csv_files: True                       # Whether to export detection results as CSV
+export_ai_csv_files: true                       # Whether to export detection results as CSV
 
 roi_config:
   - x_min: 127                                   # Left ROI X min

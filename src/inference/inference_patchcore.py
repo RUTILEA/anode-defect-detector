@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import shutil
 import csv
 import torch
-from collections import defaultdict
+from collections import defaultdict, deque
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -33,23 +33,136 @@ class PatchCoreInference:
         self.min_idx = self.config.get("filter_index_range").get("min")
         self.max_idx = self.config.get("filter_index_range").get("max")
         self.class_label = self.config.get("class_label")
-        self.battery_ng_counter = defaultdict(int)
+        self.battery_sequences = defaultdict(lambda: {
+            'current_sequence': deque(maxlen=10),
+            'last_frame_num': None,
+            'pending_overlays': []
+        })        
         self.battery_bbox_rows = defaultdict(list)
+        self.consecutive_threshold = 4
 
     def load_config(self, path):
         with open(path, "r") as f:
             return yaml.safe_load(f)
 
+    def extract_frame_number(self, path):
+        match = re.search(r"_(\d{4})\.tif$", str(path))
+        return int(match.group(1)) if match else None
+
+    def run_patchcore_on_filtered_images(self, model_path, base_folder, roi_config, crop_output_base, final_overlay_base, threshold=2.5, resize_size=(256, 256)):
+        all_tif_paths = glob(f"{base_folder}/**/*.tif", recursive=True)
+        print(f"Found {len(all_tif_paths)} TIF files in {base_folder}")
+        path_data = []
+        for path in all_tif_paths:
+            if "負極" not in path or "Z軸" not in path:
+                continue
+            frame_num = self.extract_frame_number(path)
+            print(f"Processing {path} with frame number {frame_num}")
+            if frame_num and self.min_idx <= frame_num <= self.max_idx:
+                battery_id = Path(path).parent.parent.name
+                path_data.append({
+                    'path': path,
+                    'frame_num': frame_num,
+                    'battery_id': battery_id
+                })
+
+        path_data.sort(key=lambda x: (x['battery_id'], x['frame_num']))
+
+        model = PatchCore(device=self.device)
+        model.load_from_path(
+            str(model_path),
+            device=self.device,
+            nn_method=common.FaissNN(on_gpu=self.use_faiss_gpu, num_workers=32)
+        )
+
+        for data in tqdm(path_data, desc="PATCHCORE Inference"):
+            image_path = Path(data['path'])
+            frame_num = data['frame_num']
+            battery_id = data['battery_id']
+            image_stem = image_path.stem
+            axis = image_path.parent.name
+            crop_output_dir = Path(crop_output_base) / image_stem
+
+            overlay, bbox_drawn, score, bbox = self.patchcore_inference_with_mvtec_on_rois(
+                model, image_path, roi_config, crop_output_dir, threshold, resize_size
+            )
+
+            seq_tracker = self.battery_sequences[battery_id]
+            if 'valid_frames' not in seq_tracker:
+                seq_tracker['valid_frames'] = []
+            seq_tracker['valid_frames'].append(frame_num)
+            seq_tracker['valid_frames'].sort()
+
+            idx = seq_tracker['valid_frames'].index(frame_num)
+            previous_frame = seq_tracker['valid_frames'][idx - 1] if idx > 0 else None
+            is_consecutive = (previous_frame == seq_tracker['last_frame_num'])
+
+            if bbox_drawn and score > threshold:
+                if is_consecutive or not seq_tracker['current_sequence']:
+                    seq_tracker['current_sequence'].append(frame_num)
+                else:
+                    seq_tracker['current_sequence'] = deque([frame_num], maxlen=self.consecutive_threshold)
+            else:
+                seq_tracker['current_sequence'].clear()
+
+            seq_tracker['last_frame_num'] = frame_num
+
+            has_consecutive_anomalies = (
+                len(seq_tracker['current_sequence']) >= self.consecutive_threshold and
+                all(seq_tracker['current_sequence'][i] + 1 == seq_tracker['current_sequence'][i + 1]
+                    for i in range(len(seq_tracker['current_sequence']) - 1))
+            )
+
+            if overlay is None:
+                continue
+
+            if bbox_drawn and score > threshold:
+                seq_tracker['pending_overlays'].append({
+                    'overlay': overlay,
+                    'bbox': bbox,
+                    'image_path': image_path,
+                    'image_stem': image_stem,
+                    'axis': axis,
+                    'battery_id': battery_id
+                })
+
+            if has_consecutive_anomalies:
+                for item in seq_tracker['pending_overlays']:
+                    output_dir = Path(final_overlay_base) / "anomaly" / item['battery_id'] / item['axis']
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    final_overlay_path = output_dir / f"{item['image_stem']}.png"
+                    cv2.imwrite(str(final_overlay_path), item['overlay'])
+
+                    x1, y1, x2, y2 = item['bbox']
+                    filename_png = item['image_path'].with_suffix(".png").name
+                    self.battery_bbox_rows[item['battery_id']].append([
+                        filename_png, x1, y1, x2, y2, 1, "", ""
+                    ])
+
+                seq_tracker['pending_overlays'] = []
+                seq_tracker['current_sequence'].clear()
+            else:
+                if not has_consecutive_anomalies and overlay is not None:
+                    output_dir = Path(final_overlay_base) / "normal" / battery_id / axis
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    final_overlay_path = output_dir / f"{image_stem}.png"
+                    cv2.imwrite(str(final_overlay_path), cv2.imread(str(image_path)))
+
+        if Path(crop_output_base).exists():
+            shutil.rmtree(crop_output_base, ignore_errors=True)
+
     def patchcore_inference_with_mvtec_on_rois(self, model, original_image_path, roi_config, crop_output_dir, threshold=2.5, resize_size=256):
         original_img = cv2.imread(str(original_image_path))
         if original_img is None:
-            return None, False
+            return None, False, 0, None
 
         overlay = original_img.copy()
         Path(crop_output_dir).mkdir(parents=True, exist_ok=True)
         crop_metadata = []
 
         stem = Path(original_image_path).stem
+        battery_id = Path(original_image_path).parent.parent.name
+
         for roi in roi_config:
             x_min, x_max = roi["x_min"], roi["x_max"]
             y_min, y_max = roi["y_min"], roi["y_max"]
@@ -70,16 +183,24 @@ class PatchCoreInference:
         dataset = MVTecDataset(source=crop_output_dir, resize=resize_size, imagesize=resize_size, inference_mode=True)
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-        anomaly_detected = False
+        bbox_drawn = False
+        max_score = 0
+        final_bbox = None
 
         for idx, batch in enumerate(dataloader):
             image_tensor = batch["image"].to(model.device)
             scores, masks = model.predict_without_ground_truth([{"image": image_tensor}])
             score = scores[0]
             mask = masks[0]
+
+            if score > max_score:
+                max_score = score
+
+            if score <= threshold:
+                continue
+
             meta = crop_metadata[idx]
             crop_box = meta["crop_box"]
-            crop_img = meta["crop_image"]
             crop_w = crop_box[2] - crop_box[0]
             crop_h = crop_box[3] - crop_box[1]
 
@@ -108,6 +229,7 @@ class PatchCoreInference:
                     y2, x2 = np.max(cluster_points, axis=0)
                     best_box = (x1, y1, x2, y2)
                     best_score = avg_score
+
             if best_box:
                 x1, y1, x2, y2 = best_box
                 abs_x1 = int(x1 * scale_x + crop_box[0])
@@ -115,84 +237,31 @@ class PatchCoreInference:
                 abs_x2 = int(x2 * scale_x + crop_box[0])
                 abs_y2 = int(y2 * scale_y + crop_box[1])
 
-                if score > threshold:
-                    anomaly_detected = True
-                    filename_png = Path(original_image_path).with_suffix(".png").name
-                    battery_id = Path(original_image_path).parent.parent.name
-                    self.battery_bbox_rows[battery_id].append([
-                        filename_png, abs_x1, abs_y1, abs_x2, abs_y2, 1, "", ""
-                    ])
-                    cv2.rectangle(overlay, (abs_x1, abs_y1), (abs_x2, abs_y2), (0, 0, 255), 2)
-                    font_scale = 0.6
-                    font_thickness = 1
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    text_size = cv2.getTextSize(self.class_label, font, font_scale, font_thickness)[0]
-                    text_origin = (abs_x1, abs_y1 - 5 if abs_y1 - 5 > 10 else abs_y1 + 15)
-                    cv2.putText(
-                        overlay, self.class_label, text_origin, font,
-                        font_scale, (0, 0, 255), font_thickness, lineType=cv2.LINE_AA
-                    )
+                final_bbox = (abs_x1, abs_y1, abs_x2, abs_y2)
+                bbox_drawn = True
+                cv2.rectangle(overlay, (abs_x1, abs_y1), (abs_x2, abs_y2), (0, 0, 255), 2)
+                text_origin = (abs_x1, abs_y1 - 5 if abs_y1 - 5 > 10 else abs_y1 + 15)
+                cv2.putText(
+                    overlay, self.class_label, text_origin, cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6, (0, 0, 255), 1, lineType=cv2.LINE_AA
+                )
 
-        return overlay, anomaly_detected
-
-    def run_patchcore_on_filtered_images(self, model_path, base_folder, roi_config, crop_output_base, final_overlay_base, threshold=2.5, resize_size=(256, 256)):
-        all_tif_paths = glob(f"{base_folder}/**/*.tif", recursive=True)
-        filtered_paths = []
-
-        for path in all_tif_paths:
-            if "負極" not in path or "Z軸" not in path:
-                continue
-            match = re.search(r"_(\d{4})\.tif$", path)
-            if match and self.min_idx <= int(match.group(1)) <= self.max_idx:
-                filtered_paths.append(path)
-
-        model = PatchCore(device=self.device)
-        model.load_from_path(
-            str(model_path),
-            device=self.device,
-            nn_method=common.FaissNN(on_gpu=self.use_faiss_gpu, num_workers=32)
-        )
-
-        for image_path in tqdm(sorted(filtered_paths), desc="PATCHCORE Inference"):
-            image_path = Path(image_path)
-            image_stem = image_path.stem
-            battery_id = image_path.parent.parent.name
-            axis = image_path.parent.name
-            crop_output_dir = Path(crop_output_base) / image_stem
-
-            overlay, is_anomaly = self.patchcore_inference_with_mvtec_on_rois(
-                model, image_path, roi_config, crop_output_dir, threshold, resize_size
-            )
-
-            if is_anomaly:
-                self.battery_ng_counter[battery_id] += 1
-
-            if overlay is None:
-                continue
-
-            label = "anomaly" if is_anomaly else "normal"
-            output_dir = Path(final_overlay_base) / label / battery_id / axis
-            output_dir.mkdir(parents=True, exist_ok=True)
-            final_overlay_path = output_dir / f"{image_stem}.png"
-            cv2.imwrite(str(final_overlay_path), overlay)
-
-        if Path(crop_output_base).exists():
-            shutil.rmtree(crop_output_base, ignore_errors=True)
+        return overlay, bbox_drawn, max_score, final_bbox
 
     def save_csv_results(self):
         ai_results_root = self.output_path / "AI_RESULTS"
         ai_results_root.mkdir(parents=True, exist_ok=True)
 
         for battery_id, rows in self.battery_bbox_rows.items():
-            ng_count = self.battery_ng_counter[battery_id]
-            if ng_count == 0:
+            if not rows:
                 continue
 
             battery_result_dir = ai_results_root / battery_id
             battery_result_dir.mkdir(parents=True, exist_ok=True)
+            sanitized_id = battery_id.replace("/", "_").replace("[", "").replace("]", "")
 
-            log_path = battery_result_dir / f"{battery_id}_log.csv"
-            with open(log_path, "w", newline="", encoding="utf-8") as f_log:
+            log_path = battery_result_dir / f"{sanitized_id}_log.csv"
+            with open(log_path, mode="w", newline="", encoding="utf-8") as f_log:
                 writer = csv.writer(f_log)
                 writer.writerow(["Name", "Result", "NG_countL", "NG_countP", "NG_countE"])
                 seen = set()
@@ -201,27 +270,9 @@ class PatchCoreInference:
                         writer.writerow([row[0], "NG", 1, "", ""])
                         seen.add(row[0])
 
-            detected_path = battery_result_dir / f"{battery_id}_detected.csv"
-            with open(detected_path, "w", newline="", encoding="utf-8") as f_det:
+            detected_path = battery_result_dir / f"{sanitized_id}_detected.csv"
+            with open(detected_path, mode="w", newline="", encoding="utf-8") as f_det:
                 writer = csv.writer(f_det)
                 writer.writerow(["file_name", "xmin", "ymin", "xmax", "ymax", "L", "P", "E"])
                 for row in rows:
                     writer.writerow(row)
-
-# if __name__ == "__main__":
-#     config_path = Path(__file__).resolve().parent.parent / "config.yaml"
-#     inference = PatchCoreInference(config_path=config_path)
-
-#     for data_dir in [inference.data_dir]:
-#         inference.run_patchcore_on_filtered_images(
-#             model_path=inference.model_save_path,
-#             base_folder=data_dir,
-#             roi_config=inference.config.get("roi_config"),
-#             crop_output_base=(inference.output_path / 'patchcore_crops').resolve(),
-#             final_overlay_base=inference.output_path,
-#             threshold=inference.config.get("patchcore_threshold"),
-#             resize_size=inference.config.get("resize_size")
-#         )
-
-#     if inference.config.get("export_ai_csv_files"):
-#         inference.save_csv_results()
