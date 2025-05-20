@@ -51,13 +51,11 @@ class PatchCoreInference:
 
     def run_patchcore_on_filtered_images(self, model_path, base_folder, roi_config, crop_output_base, final_overlay_base, threshold=2.5, resize_size=(256, 256)):
         all_tif_paths = glob(f"{base_folder}/**/*.tif", recursive=True)
-        print(f"Found {len(all_tif_paths)} TIF files in {base_folder}")
         path_data = []
         for path in all_tif_paths:
             if "負極" not in path or "Z軸" not in path:
                 continue
             frame_num = self.extract_frame_number(path)
-            print(f"Processing {path} with frame number {frame_num}")
             if frame_num and self.min_idx <= frame_num <= self.max_idx:
                 battery_id = Path(path).parent.parent.name
                 path_data.append({

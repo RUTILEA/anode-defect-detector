@@ -23,7 +23,6 @@ for root, dirs, files in os.walk(unzip_dir):
             if os.path.exists(dst):
                 shutil.rmtree(dst)
             shutil.move(src, dst)
-            print(f"Moved {folder_name} to {dst}")
 
 os.remove(output_zip)
 shutil.rmtree(unzip_dir)

@@ -139,8 +139,7 @@ class RFDETRInference:
             if ng_count == 0:
                 continue
 
-            # Keep only the battery folder name
-            safe_battery_id = battery_id.split("__")[0]  # removes __[Z軸] if present
+            safe_battery_id = battery_id.split("__")[0]
 
             battery_result_dir = ai_results_root / safe_battery_id
             battery_result_dir.mkdir(parents=True, exist_ok=True)
