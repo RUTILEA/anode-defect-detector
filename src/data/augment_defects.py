@@ -128,3 +128,39 @@ class DefectAugmentor:
                     annotation_id += 1
                     total_saved += 1
         return images, annotations, total_saved
+    
+    def crop_and_save_rois(self, input_dir, output_dir):
+        input_root = Path(input_dir)
+        output_root = Path(output_dir)
+        output_root.mkdir(parents=True, exist_ok=True)
+        count = 0
+
+        for root, _, files in os.walk(input_root):
+            for file in files:
+                if (
+                    file.lower().endswith(".tif")
+                    and "負極" in file
+                    and "Z軸" in root
+                    and not str(Path(root)).startswith(str(output_root))
+                    and any(f"_{i:04}" in file for i in range(160, 240))
+                ):
+                    root_path = Path(root)
+                    full_path = root_path / file
+                    try:
+                        img = cv2.imread(str(full_path), cv2.IMREAD_UNCHANGED)
+                        if img is None:
+                            continue
+                        base_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        base_name = Path(file).stem
+
+                        for roi in self.roi_config:
+                            crop = base_rgb[roi["y_min"]:roi["y_max"], roi["x_min"]:roi["x_max"]]
+                            roi_name = roi.get("name", "roi")
+                            filename = f"{base_name}_{roi_name}_crop.png"
+                            save_path = output_root / filename
+                            cv2.imwrite(str(save_path), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                            count += 1
+                    except Exception as e:
+                        print(f"❌ Error processing {full_path}: {e}")
+
+        print(f"Total cropped ROI images saved: {count}")
