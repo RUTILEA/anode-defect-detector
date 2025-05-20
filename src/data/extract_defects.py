@@ -107,7 +107,6 @@ class DefectExtractor:
                         break
 
         print(f"\n Extracted {len(defects)} defects")
-        print(f" Extracted {len(images)} ROI crops")
         return defects, images, annotations, image_id, annotation_id
 
     def _find_image_folder(self, battery_id):

@@ -83,7 +83,6 @@ class DefectAugmentor:
                             count += 1
                     except Exception as e:
                         print(f"Error converting {full_path}: {e}")
-        print(f"Total Z-axis images converted: {count}")
 
     def augment_images_and_generate_coco(self, defects, good_images_dir, dest_good_images_dir, output_dir, img_id_start, ann_id_start, dynamic_circle_detection=True, placements_per_image=10):
         self.convert_tif_images_to_png(good_images_dir, dest_good_images_dir)
@@ -128,5 +127,4 @@ class DefectAugmentor:
                     image_id += 1
                     annotation_id += 1
                     total_saved += 1
-        print(f"Total augmented images saved: {total_saved}")
         return images, annotations, total_saved
