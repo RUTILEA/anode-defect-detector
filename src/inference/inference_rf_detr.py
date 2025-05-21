@@ -27,7 +27,7 @@ class RFDETRInference:
         self.model.model.model.to(self.device)
         self.model.model.device = self.device
         self.model.model.model.eval()
-        self.class_label = [self.config["class_label"]]
+        self.class_label = self.config.get("class_label")
         self.roi_config =  self.config.get("roi_config")
         self.min_idx = self.config.get("filter_index_range").get("min")
         self.max_idx = self.config.get("filter_index_range").get("max")
@@ -95,7 +95,7 @@ class RFDETRInference:
             if detections_all:
                 detections_merged = sv.Detections.merge(detections_all)
                 labels = [
-                    f"{self.class_label[class_id]} {confidence:.2f}"
+                    f"{self.class_label} {confidence:.2f}"
                     for class_id, confidence in zip(detections_merged.class_id, detections_merged.confidence)
                 ]
                 annotated_image = self.bbox_annotator.annotate(image_pil.copy(), detections_merged)
