@@ -18,12 +18,11 @@ sys.path.append(str(PROJECT_ROOT))
 with open(PROJECT_ROOT / "src/config.yaml", "r") as f:
     cfg = yaml.safe_load(f)
 
-roi_config = [
-    {"x_min": 127, "x_max": 294, "y_min": 448, "y_max": 576, "circles_y": [513], "name": "left"},
-    {"x_min": 733, "x_max": 900, "y_min": 448, "y_max": 576, "circles_y": [514], "name": "right"},
-]
-
 def main():
+    roi_config = cfg["roi_config"]
+    for roi in roi_config:
+        roi["circles_y"] = [513]
+        
     augmentor = DefectAugmentor(roi_config=roi_config,config=cfg)
     augmentor.crop_and_save_rois(
         input_dir=cfg["good_images_dir"],
