@@ -11,8 +11,10 @@ from sklearn.model_selection import train_test_split
 
 
 class DefectAugmentor:
-    def __init__(self, roi_config):
+    def __init__(self, roi_config,config):
         self.roi_config = roi_config
+        self.min_idx = config.get("filter_index_range").get("min")
+        self.max_idx = config.get("filter_index_range").get("max")
 
     @staticmethod
     def enhance_contrast_patch(base_img, mask, patch, y, x, strength=0.6):
@@ -62,8 +64,7 @@ class DefectAugmentor:
             tries += 1
         return None
 
-    @staticmethod
-    def convert_tif_images_to_png(input_root, output_root):
+    def convert_tif_images_to_png(self,input_root, output_root):
         input_root = Path(input_root)
         output_root = Path(output_root)
         count = 0
@@ -71,7 +72,7 @@ class DefectAugmentor:
             for file in files:
                 if (file.lower().endswith(".tif") and "負極" in file and "Z軸" in root and
                     not str(Path(root)).startswith(str(output_root)) and
-                    any(f"_{i:04}" in file for i in range(215, 223))):
+                    any(f"_{i:04}" in file for i in range(self.min_idx, self.max_idx + 1))):
                     full_path = Path(root) / file
                     rel_path = full_path.relative_to(input_root).with_suffix(".png")
                     output_path = output_root / rel_path
@@ -84,7 +85,17 @@ class DefectAugmentor:
                     except Exception as e:
                         print(f"Error converting {full_path}: {e}")
 
-    def augment_images_and_generate_coco(self, defects, good_images_dir, dest_good_images_dir, output_dir, img_id_start, ann_id_start, dynamic_circle_detection=True, placements_per_image=10):
+    def augment_images_and_generate_coco(
+        self,
+        defects,
+        good_images_dir,
+        dest_good_images_dir,
+        output_dir,
+        img_id_start,
+        ann_id_start,
+        dynamic_circle_detection=True,
+        placements_per_image=10
+    ):
         self.convert_tif_images_to_png(good_images_dir, dest_good_images_dir)
         image_id = img_id_start
         annotation_id = ann_id_start
@@ -99,31 +110,61 @@ class DefectAugmentor:
             base_name = Path(img_path).stem
             gray = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2GRAY)
             blurred = cv2.GaussianBlur(gray, (9, 9), 2)
+
             for roi in self.roi_config:
                 detected_circles = self.detect_dynamic_circles(blurred) if dynamic_circle_detection else []
                 selected_defects = random.sample(defects, min(placements_per_image, len(defects)))
-                placed_boxes = []
                 for defect_idx, selected_defect in enumerate(selected_defects):
+                    temp_rgb = base_rgb.copy()
+                    placed_boxes = []
+
                     pos = self.generate_half_positions(
-                        roi, random.choice(["top", "bottom"]),
-                        selected_defect["w"], selected_defect["h"],
-                        min_dist=12, y_split=roi["circles_y"][0],
-                        margin=3, buffer=7,
-                        circles=detected_circles, existing_boxes=placed_boxes
+                        roi,
+                        random.choice(["top", "bottom"]),
+                        selected_defect["w"],
+                        selected_defect["h"],
+                        min_dist=12,
+                        y_split=roi["circles_y"][0],
+                        margin=3,
+                        buffer=7,
+                        circles=detected_circles,
+                        existing_boxes=placed_boxes,
                     )
+
                     if not pos:
                         continue
                     x = pos["x"] - selected_defect["w"] // 2
                     y = pos["y"] - selected_defect["h"] // 2
                     placed_boxes.append((x, y))
-                    patch = self.enhance_contrast_patch(base_rgb, selected_defect["mask"], selected_defect["patch"], y, x)
+                    patch = self.enhance_contrast_patch(temp_rgb, selected_defect["mask"], selected_defect["patch"], y, x)
                     for c in range(3):
-                        base_rgb[y:y+selected_defect["h"], x:x+selected_defect["w"], c][selected_defect["mask"]] = patch[..., c][selected_defect["mask"]]
-                    crop = base_rgb[roi["y_min"]:roi["y_max"], roi["x_min"]:roi["x_max"]]
+                        temp_rgb[y:y+selected_defect["h"], x:x+selected_defect["w"], c][selected_defect["mask"]] = patch[..., c][selected_defect["mask"]]
+                    crop = temp_rgb[roi["y_min"]:roi["y_max"], roi["x_min"]:roi["x_max"]]
                     filename = f"{base_name}_{roi['name']}_d{defect_idx}.png"
-                    cv2.imwrite(os.path.join(output_dir, filename), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
-                    images.append({"id": image_id, "file_name": filename, "width": crop.shape[1], "height": crop.shape[0]})
-                    annotations.append({"id": annotation_id, "image_id": image_id, "category_id": 0, "bbox": [x - roi["x_min"], y - roi["y_min"], selected_defect["w"], selected_defect["h"]], "area": selected_defect["w"] * selected_defect["h"], "iscrowd": 0, "segmentation": []})
+                    output_path = os.path.join(output_dir, filename)
+                    cv2.imwrite(output_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                    images.append({
+                        "id": image_id,
+                        "file_name": filename,
+                        "width": crop.shape[1],
+                        "height": crop.shape[0]
+                    })
+
+                    annotations.append({
+                        "id": annotation_id,
+                        "image_id": image_id,
+                        "category_id": 0,
+                        "bbox": [
+                            x - roi["x_min"],
+                            y - roi["y_min"],
+                            selected_defect["w"],
+                            selected_defect["h"]
+                        ],
+                        "area": selected_defect["w"] * selected_defect["h"],
+                        "iscrowd": 0,
+                        "segmentation": []
+                    })
+
                     image_id += 1
                     annotation_id += 1
                     total_saved += 1
@@ -142,7 +183,7 @@ class DefectAugmentor:
                     and "負極" in file
                     and "Z軸" in root
                     and not str(Path(root)).startswith(str(output_root))
-                    and any(f"_{i:04}" in file for i in range(160, 240))
+                    and any(f"_{i:04}" in file for i in range(self.min_idx, self.max_idx + 1))
                 ):
                     root_path = Path(root)
                     full_path = root_path / file
@@ -161,6 +202,6 @@ class DefectAugmentor:
                             cv2.imwrite(str(save_path), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
                             count += 1
                     except Exception as e:
-                        print(f"❌ Error processing {full_path}: {e}")
+                        print(f"Error processing {full_path}: {e}")
 
         print(f"Total cropped ROI images saved: {count}")
