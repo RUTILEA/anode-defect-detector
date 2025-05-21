@@ -9,7 +9,7 @@ output_train_dir: data/raw/patchcore_data/train/good
 output_dir_model_rf_detr: models/rf_detr
 output_dir_model_patchcore : ../models/patchcore
 output_inference_dir: ../results
-for_prediction: /home/anode-defect-detector/data3/NEGATIVES
+for_prediction: ../data3/input_data
 export_ai_csv_files: false
 roi_config:
   - x_min: 127

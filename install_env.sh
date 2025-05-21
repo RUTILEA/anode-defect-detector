@@ -1,5 +1,5 @@
 
-ENV_NAME="checkthis"
+ENV_NAME="annode_env"
 PYTHON_VERSION="3.10"
 
 install_miniconda() {

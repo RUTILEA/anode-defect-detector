@@ -26,7 +26,7 @@ def main():
     augmentor = DefectAugmentor(roi_config=roi_config,config=cfg)
     augmentor.crop_and_save_rois(
         input_dir=cfg["good_images_dir"],
-        output_dir=str(cfg["output_patchcore_dir"])+"/patchcore_data/train/good",
+        output_dir=cfg["output_train_dir"]
     )
     extractor = DefectExtractor(
         annotations_root=cfg["annotations_root"],
