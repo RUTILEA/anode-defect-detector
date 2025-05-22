@@ -1,5 +1,5 @@
 
-ENV_NAME="annode-defect-env"
+ENV_NAME="annode-defect-env1"
 PYTHON_VERSION="3.10"
 
 install_miniconda() {

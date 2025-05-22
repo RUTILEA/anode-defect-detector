@@ -2,7 +2,7 @@ output_dir_model_rf_detr: models/rf_detr         # Folder for RF-DETR model chec
 output_dir_model_patchcore: models/patchcore     # Folder for PatchCore model files
 
 output_inference_dir: results                    # Root folder where inference outputs (images, CSVs) are saved
-input_dir: data/NEGATIVES                       # Directory containing images to run inference on
+input_dir: data/input_data                       # Directory containing images to run inference on
 export_ai_csv_files: true                       # Whether to export detection results as CSV
 
 roi_config:
